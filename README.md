@@ -1,5 +1,4 @@
-# SOA 
-
+# SOA
 This project implements a Linux kernel subsystem
 that allows exchanging messages across threads.
 The service has 32 levels (namely, tags) by default,
@@ -55,13 +54,36 @@ of the kernel you have currently installed you can use:
 > :warning: The headers must have the **same version** of the kernel
 
 ## Deployment
-
-First create all needed files:
+1. Create all needed files
+  
 
     make all
 
-Insert the new module in the kernel (requires permissions):
+2. Insert new module into the kernel
+
 
     insmod soa.ko
-  
 
+## Demo
+You can run a demo of this project which lets you call each of the 
+system calls defined in the top of this file.
+
+    cd demo
+    
+    gcc demo.c
+
+    ./a.out
+
+### Available commands
+
+  * **get key command permission** calls tag_get with the specified key, command and permission
+  
+  * **send tag level buffer size** calls tag_send on the specified tag and level to send the buffer
+
+  * **receive tag level size** calls tag_receive on the specified tag and level to receive a message of the specified size
+
+  * **ctl tag command** calls tag_ctl on the specified tag service to execute the command
+
+  * **help** shows the list of available commands
+
+  * **quit** quits the demo
