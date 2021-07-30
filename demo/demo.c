@@ -1,9 +1,15 @@
+/* ---------------------------------------------------------------------------------------------------------------------
+	DEMO
+
+ Detailed info on how to use the system calls and their parameters can be found in the README.md file.
+--------------------------------------------------------------------------------------------------------------------- */
+
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-// Systemcall numbers
+// System call numbers
 #define TAG_GET 134
 #define TAG_SEND 174
 #define TAG_RECEIVE 182
@@ -12,12 +18,16 @@
 // Shows list of commands
 void show_help();
 
+// Prints an error in red
+void print_error(char *string);
+
+
 int main(int argc, char** argv){
 
     char *command;
     char *choice;
     char *buffer;
-    int p1, p2, p3;
+    int p1, p2, p3, ret;
     char *p4;
 
     system("clear");	// Cleans the terminal
@@ -30,8 +40,17 @@ int main(int argc, char** argv){
 
         printf("--> ");
 
-        scanf("%m[^\n]s", &command);	// Controllo su scanf ?????????????
+        ret = scanf("%m[^\n]s", &command);
         getchar();
+
+        // Checking scanf for errors
+        if(ret < 0){
+            print_error("Error reading from stdin");
+            continue;
+        }
+        else if(ret == 0){
+            continue;
+        }
 
         choice = strtok(command, " ");
 
@@ -41,17 +60,23 @@ int main(int argc, char** argv){
             p2 = atoi(strtok(NULL, " "));
             p3 = atoi(strtok(NULL, " "));
 
-            printf("tag_get returned %ld\n", syscall(TAG_GET, p1, p2, p3));
+            ret = syscall(TAG_GET, p1, p2, p3);
 
+            if(ret != 0){
+                print_error("Error");
+            }
         }
         else if(strcmp(choice, "send") == 0){
 
             p1 = atoi(strtok(NULL, " "));
             p2 = atoi(strtok(NULL, " "));
             p4 = strtok(NULL, " ");
-            p3 = atoi(strtok(NULL, " "));
 
-            printf("tag_send returned %ld\n", syscall(TAG_SEND, p1, p2, p4, p3));
+            ret = syscall(TAG_SEND, p1, p2, p4, strlen(p4));
+
+            if(ret != 0){
+                print_error("Error");
+            }
 
         }
         else if(strcmp(choice, "receive") == 0){
@@ -62,8 +87,20 @@ int main(int argc, char** argv){
 
             buffer = (char *)malloc(p3*sizeof(char));
 
-            printf("tag_receive returned %ld\n", syscall(TAG_RECEIVE, p1, p2, buffer, p3));
-            printf("Buffer : %s\n", buffer);
+            // Checking if buffer was correctly allocated
+            if (buffer == NULL){
+                print_error("Buffer allocation error");
+                continue;
+            }
+
+            ret = syscall(TAG_RECEIVE, p1, p2, buffer, p3);
+
+            if(ret != 0){
+                print_error("Error");
+            }
+            else{
+                printf("Buffer received : %s\n", buffer);
+            }
 
             free(buffer);
 
@@ -73,7 +110,11 @@ int main(int argc, char** argv){
             p1 = atoi(strtok(NULL, " "));
             p2 = atoi(strtok(NULL, " "));
 
-            printf("tag_ctl returned %ld\n", syscall(TAG_CTL, p1, p2));
+            ret = syscall(TAG_CTL, p1, p2);
+
+            if(ret != 0){
+                print_error("Error");
+            }
 
         }
         else if(strcmp(choice, "help") == 0){
@@ -92,12 +133,14 @@ int main(int argc, char** argv){
     return 0;
 }
 
+//----------------------------------------------------------------------------------------------------------------------
+
 void show_help(){
 
     printf("\n --------------------------------------------------------------\n");
     printf("|                                                              |\n");
     printf("| get key command permission            - tag_get              |\n");
-    printf("| send tag level buffer size            - tag_send             |\n");
+    printf("| send tag level buffer                 - tag_send             |\n");
     printf("| receive tag level size                - tag_receive          |\n");
     printf("| ctl tag command                       - tag_ctl              |\n");
     printf("| help                                  - Shows this manual    |\n");
@@ -105,4 +148,14 @@ void show_help(){
     printf("|                                                              |\n");
     printf(" --------------------------------------------------------------\n\n");
 
+}
+
+
+void print_error(char *string){
+
+    printf("\033[1;31m\n"); // set red
+
+    perror(string);
+
+    printf("\033[0m\n"); // remove red
 }

@@ -49,7 +49,6 @@ MODULE_AUTHOR("Francesco Quaglia <framcesco.quaglia@uniroma2.it>");
 MODULE_DESCRIPTION("USCTM");
 
 
-
 #define MODNAME "USCTM"
 
 
@@ -192,6 +191,50 @@ unprotect_memory(void)
     write_cr0_forced(cr0 & ~X86_CR0_WP);
 }
 
+// NEW SYSTEM CALLS ----------------------------------------------------------------------------------------------------
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
+__SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission) {
+#else
+asmlinkage int sys_tag_get(int key, int command, int permission) {
+#endif
+    return tag_get(key, command, permission);
+}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
+__SYSCALL_DEFINEx(4, _tag_send, int, tag, int, level, char *, buffer, size_t, size) {
+#else
+asmlinkage int sys_tag_send(int tag, int level, char *buffer, size_t size) {
+#endif
+    return tag_send(tag, level, buffer, size);
+}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
+__SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char *, buffer, size_t, size) {
+#else
+asmlinkage int sys_tag_receive(int tag, int level, char * buffer, size_t size) {
+#endif
+    return tag_receive(tag, level, buffer, size);
+}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
+__SYSCALL_DEFINEx(2, _tag_ctl, int, tag, int, command) {
+#else
+asmlinkage int sys_tag_ctl(int tag, int command) {
+#endif
+    return tag_ctl(tag, command);
+}
+
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
+static unsigned long sys_tag_get = (unsigned long) __x64_sys_tag_get;
+static unsigned long sys_tag_send = (unsigned long) __x64_sys_tag_send;
+static unsigned long sys_tag_receive = (unsigned long) __x64_sys_tag_receive;
+static unsigned long sys_tag_ctl = (unsigned long) __x64_sys_tag_ctl;
+#else
+#endif
+
+// ---------------------------------------------------------------------------------------------------------------------
 
 int init_module(void) {
 
@@ -238,7 +281,8 @@ int init_module(void) {
 void cleanup_module(void) {
 
 #ifdef SYS_CALL_INSTALL
-    cr0 = read_cr0();    unprotect_memory();
+    cr0 = read_cr0();
+    unprotect_memory();
     hacked_syscall_tbl[FIRST_NI_SYSCALL] = (unsigned long*)hacked_ni_syscall;
     hacked_syscall_tbl[SECOND_NI_SYSCALL] = (unsigned long*)hacked_ni_syscall;
     hacked_syscall_tbl[THIRD_NI_SYSCALL] = (unsigned long*)hacked_ni_syscall;
@@ -249,4 +293,3 @@ void cleanup_module(void) {
     printk("%s: shutting down\n",MODNAME);
 
 }
-

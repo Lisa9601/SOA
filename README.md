@@ -77,12 +77,16 @@ system calls defined in the top of this file.
 ### Available commands
 
   * **get key command permission** calls tag_get with the specified key, command and permission
-  
-  * **send tag level buffer size** calls tag_send on the specified tag and level to send the buffer
+    * **command = 1** CREATE 
+    * **command = 2** OPEN
+
+  * **send tag level buffer** calls tag_send on the specified tag and level to send the buffer
 
   * **receive tag level size** calls tag_receive on the specified tag and level to receive a message of the specified size
 
   * **ctl tag command** calls tag_ctl on the specified tag service to execute the command
+    * **command = 3** AWAKE ALL
+    * **command = 4** REMOVE
 
   * **help** shows the list of available commands
 
