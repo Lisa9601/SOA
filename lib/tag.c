@@ -28,11 +28,11 @@ MODULE_AUTHOR("Lisa Trombetti <lisa.trombetti96@gmail.com>");
 // ---------------------------------------------------------------------------------------------------------------------
 
 struct tag_t {
-
     struct list_head list;
+
     int key;
     int desc;
-
+    int private;
 };
 
 static LIST_HEAD(head);
@@ -48,6 +48,10 @@ int search_tag_by_key(int key) {
         // Key found
         if(p->key == key){
             rcu_read_unlock();
+
+            // Checks if service is private
+            if(p->private == 1) return -2;
+
             return p->desc;
         }
     }
@@ -73,15 +77,15 @@ int search_tag_by_desc(int desc){
 }
 
 // Insert a new tag
-int insert_tag(int key, int desc){
+int insert_tag(int key, int desc, int private){
 
-    struct tag_t *new = kmalloc(sizeof(tag_t), GFP_ATOMIC);
-
+    struct tag_t *new = (struct tag_t *)kmalloc(sizeof(struct tag_t), GFP_ATOMIC);
     new->key = key;
-    new->desc = key; // =(((((
+    new->desc = desc;
+    new->private = private;
 
     spin_lock(&list_lock);
-    list_add_tail_rcu(&(new->list), &head);
+    list_add_tail_rcu(&(new->list), &head); // Add at the tail of the list
     spin_unlock(&list_lock);
 
     return 0;
@@ -97,14 +101,14 @@ int delete_tag(int desc){
 
         // Descriptor found
         if(p->desc == desc){
-            list_del_rcu(&p->list);
+            list_del_rcu(&p->list); // Remove element
             spin_unlock(&list_lock);
             synchronize_rcu();
-            kfree(p);
+            kfree(p); // Reclaim space
             return 0;
         }
     }
-    synchronize_rcu(&list_lock);
+    spin_unlock(&list_lock);
     return -1;
 }
 
@@ -114,44 +118,46 @@ int tag_get(int key, int command, int permission) {
 
     int desc = 0;
     int private = 1;
+    int ret;
 
-    printk("%s: sys_tag_get called with params %d - %d - %d\n", MODNAME, key, command, permission);
+    printk("%s: tag_get called with params %d - %d - %d\n", MODNAME, key, command, permission);
 
     if(command == CREATE){
 
         // Valid key values can only be integer numbers >= 1
         if(key < 1){
-            printk("%s: invalid key value %d, must be an integer >= 1\n", MODNAME, key);
+            printk("%s: Invalid key value %d, must be an integer >= 1\n", MODNAME, key);
             return -EINVAL;
         }
-
-        struct tag_t *new = kmalloc(sizeof(tag_t), GFP_ATOMIC);
-        new->key = key;
-        new->desc = key; // =(((((
-        spin_lock(&list_lock);
-        list_add_tail_rcu(&(new->list), &head);
-        spin_unlock(&list_lock);
-
-        return 0;
 
         /*
         if(list->count >= 255){
             printk("%s: maximum number of services reached!\n", MODNAME);
             return -1;
         }
+        */
 
+        if(key != IPC_PRIVATE) private=0;
 
-        if(key != IPC_PRIVATE){
-
-            private = 0;
-
-            if(tag_list_search_by_key(list, key) != -1){
-                // Key already exists
-                printk("%s: tag service with key %d already exists\n", MODNAME, key);
-                return -1;
-            }
+        if(search_tag_by_key(key) != -1){
+            // Key already exists
+            printk("%s: tag service with key %d already exists\n", MODNAME, key);
+            return -1;
         }
 
+        desc = key;
+        ret = insert_tag(key, desc, private);
+
+        if (ret != 0){
+            // Fai roba
+            printk("LOL WHAT ?!");
+        }
+
+        printk("%s: new tag service %d created\n", MODNAME, desc);
+
+        return 0;
+
+        /*
         if((desc = tag_list_insert(list, key, private)) == -1) {
             printk("%s: unable to add new tag\n", MODNAME);
         }
@@ -171,10 +177,14 @@ int tag_get(int key, int command, int permission) {
     }
     else if (command == OPEN){
 
-        //desc = tag_list_search_by_key(list, key);
+        desc = search_tag_by_key(key);
 
         if(desc == -1) {
-            printk("%s: cannot open tag service with key %d\n", MODNAME, key);
+            printk("%s: tag service with key %d not found\n", MODNAME, key);
+        }
+        else if(desc == -2){
+            printk("%s: tag service with key %d is private and cannot be opened\n", MODNAME, key);
+            desc = -1;
         }
         else {
             printk("%s: tag service %d with key %d opened\n", MODNAME, desc, key);
@@ -213,34 +223,29 @@ int tag_receive(int tag, int level, char *buffer, size_t size){
 
 int tag_ctl(int tag, int command){
 
+    int ret;
+
     printk("%s: sys_tag_ctl called with params %d - %d\n", MODNAME, tag, command);
 
     if(command == AWAKE_ALL){
         printk("%s: AWAKE ALL!\n", MODNAME);
 
+        // DA FARE
+
         return -1;
     }
     else if(command == REMOVE){
-        struct tag_t  *e;
 
-        spin_lock(&list_lock);
-        list_for_each_entry(e, &head, list) {
-            if (e->key == tag) {
-                list_del_rcu(&e->list);
-                spin_unlock(&list_lock);
-                synchronize_rcu();
-                kfree(e);
+        ret = delete_tag(tag);
 
-                printk("%s: tag service %d removed\n", MODNAME, tag);
-
-                return 0;
-            }
+        if(ret == -1){
+            // There's no service with descriptor tag
+            printk("%s: unable to remove tag service with descriptor %d\n", MODNAME, tag);
+            return -ENODATA;
         }
-        spin_unlock(&list_lock);
 
-        // If there's no service with descriptor tag an error is returned
-        printk("%s: unable to remove tag service with descriptor %d\n", MODNAME, tag);
-        return -ENODATA;
+        printk("%s: tag service %d removed\n", MODNAME, tag);
+        return 0;
     }
 
     printk("%s: Wrong command %d, must be either %d (awake all) or %d (remove)\n", MODNAME, command, AWAKE_ALL, REMOVE);
