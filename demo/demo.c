@@ -1,5 +1,5 @@
 /* ---------------------------------------------------------------------------------------------------------------------
-	DEMO
+ DEMO
 
  Detailed info on how to use the system calls and their parameters can be found in the README.md file.
 --------------------------------------------------------------------------------------------------------------------- */
@@ -62,8 +62,11 @@ int main(int argc, char** argv){
 
             ret = syscall(TAG_GET, p1, p2, p3);
 
-            if(ret != 0){
+            if(ret < 0){
                 print_error("Error");
+            }
+            else{
+                printf("tag descriptor : %d\n",ret);
             }
         }
         else if(strcmp(choice, "send") == 0){

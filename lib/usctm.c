@@ -280,6 +280,8 @@ int init_module(void) {
 
 void cleanup_module(void) {
 
+    cleanup_tags();
+
 #ifdef SYS_CALL_INSTALL
     cr0 = read_cr0();
     unprotect_memory();

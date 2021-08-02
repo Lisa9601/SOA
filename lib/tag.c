@@ -1,5 +1,5 @@
 /* ---------------------------------------------------------------------------------------------------------------------
-	TAG SERVICE
+ TAG SERVICE
 
  Detailed info on what this module does can be found in the README.md file.
 --------------------------------------------------------------------------------------------------------------------- */
@@ -12,6 +12,10 @@
 #include <linux/uaccess.h>
 #include "../include/tag.h"
 
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Lisa Trombetti <lisa.trombetti96@gmail.com>");
+MODULE_DESCRIPTION("TAG SERVICE");
+
 #define MODNAME "TAG SERVICE"
 #define CREATE 1
 #define OPEN 2
@@ -19,13 +23,13 @@
 #define REMOVE 4
 #define MAX_LV 32   			// Max number of levels
 #define MAX_SIZE 4096		    // Max buffer size
-#define MAX_TAGS 256			// Max number of tag services
-
-
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Lisa Trombetti <lisa.trombetti96@gmail.com>");
+#define MAX_TAGS 2			// Max number of tag services
 
 // ---------------------------------------------------------------------------------------------------------------------
+
+static int desc_list[MAX_TAGS] = {0};    // List of descriptors
+static int start = 0;               // Where to start searching for an available descriptor
+static spinlock_t desc_lock;
 
 struct tag_t {
     struct list_head list;
@@ -33,10 +37,12 @@ struct tag_t {
     int key;
     int desc;
     int private;
+
 };
 
 static LIST_HEAD(head);
 static spinlock_t list_lock;
+
 
 // Search a tag by key
 int search_tag_by_key(int key) {
@@ -112,13 +118,30 @@ int delete_tag(int desc){
     return -1;
 }
 
+// Removes all tags in the list
+void cleanup_tags(void){
+
+    struct tag_t *p;
+
+    spin_lock(&list_lock);
+    list_for_each_entry(p, &head, list){
+
+        list_del_rcu(&p->list); // Remove element
+        //synchronize_rcu();
+        kfree(p); // Reclaim space
+
+    }
+    spin_unlock(&list_lock);
+
+    printk("%s: shutting down\n", MODNAME);
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 
 int tag_get(int key, int command, int permission) {
 
-    int desc = 0;
+    int desc, ret, i;
     int private = 1;
-    int ret;
 
     printk("%s: tag_get called with params %d - %d - %d\n", MODNAME, key, command, permission);
 
@@ -130,22 +153,35 @@ int tag_get(int key, int command, int permission) {
             return -EINVAL;
         }
 
-        /*
-        if(list->count >= 255){
-            printk("%s: maximum number of services reached!\n", MODNAME);
+        // Check if service with specified key already exists
+        if(search_tag_by_key(key) != -1){
+            printk("%s: Tag service with key %d already exists\n", MODNAME, key);
             return -1;
         }
-        */
+
+        // Search for a valid descriptor
+        spin_lock(&desc_lock);
+        for(i=0; i<MAX_TAGS; i++) {
+            desc = (start + i)%MAX_TAGS;
+
+            // Empty slot found!
+            if(desc_list[desc] == 0){
+                desc_list[desc] = 1;
+                start = (desc + 1)%MAX_TAGS;
+                break;
+            }
+
+        }
+        spin_unlock(&desc_lock);
+
+        // Check if maximum number of services has been reached
+        if(i >= MAX_TAGS){
+            printk("%s: Unable to create new service, maximum number reached %d\n", MODNAME, MAX_TAGS);
+            return -1;
+        }
 
         if(key != IPC_PRIVATE) private=0;
 
-        if(search_tag_by_key(key) != -1){
-            // Key already exists
-            printk("%s: tag service with key %d already exists\n", MODNAME, key);
-            return -1;
-        }
-
-        desc = key;
         ret = insert_tag(key, desc, private);
 
         if (ret != 0){
@@ -153,25 +189,17 @@ int tag_get(int key, int command, int permission) {
             printk("LOL WHAT ?!");
         }
 
-        printk("%s: new tag service %d created\n", MODNAME, desc);
+        printk("%s: New tag service %d created\n", MODNAME, desc);
 
-        return 0;
+        return desc;
 
         /*
-        if((desc = tag_list_insert(list, key, private)) == -1) {
-            printk("%s: unable to add new tag\n", MODNAME);
-        }
-
-        printk("%s: new tag service created\n", MODNAME);
-
 
         t_tag *p = list->head;
         while (p!= NULL) {
             printk("%s: %d %d\n", MODNAME, p->key, p->desc);
             p = p->next;
         }
-
-        return desc;
 
          */
     }
@@ -183,7 +211,7 @@ int tag_get(int key, int command, int permission) {
             printk("%s: tag service with key %d not found\n", MODNAME, key);
         }
         else if(desc == -2){
-            printk("%s: tag service with key %d is private and cannot be opened\n", MODNAME, key);
+            printk("%s: tag service with key %d it's private and cannot be opened\n", MODNAME, key);
             desc = -1;
         }
         else {
@@ -201,6 +229,7 @@ int tag_get(int key, int command, int permission) {
 int tag_send(int tag, int level, char *buffer, size_t size){
 
     int ret;
+
     char *copied = (char *)kmalloc(size*sizeof(char), GFP_KERNEL);
 
     ret = copy_from_user((char*)copied,(char*)buffer,size);
@@ -208,6 +237,8 @@ int tag_send(int tag, int level, char *buffer, size_t size){
     printk("%s: copy from user returned %d\n",MODNAME,ret);
 
     printk("%s: sys_tag_send called with params %d - %d - %s - %zu\n", MODNAME, tag, level, copied, size);
+
+
 
     return 0;
 }
@@ -238,13 +269,18 @@ int tag_ctl(int tag, int command){
 
         ret = delete_tag(tag);
 
+        // Check if no service ha descriptor tag
         if(ret == -1){
-            // There's no service with descriptor tag
-            printk("%s: unable to remove tag service with descriptor %d\n", MODNAME, tag);
+            printk("%s: Unable to remove tag service with descriptor %d, it doesn't exist\n", MODNAME, tag);
             return -ENODATA;
         }
 
-        printk("%s: tag service %d removed\n", MODNAME, tag);
+        spin_lock(&desc_lock);
+        desc_list[tag] = 0;     // Free descriptor
+        start = tag;            // Start searching from this descriptor
+        spin_unlock(&desc_lock);
+
+        printk("%s: Tag service %d removed\n", MODNAME, tag);
         return 0;
     }
 
