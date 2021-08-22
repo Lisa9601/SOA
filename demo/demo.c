@@ -8,12 +8,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "./include/threads.h"
 
-// System call numbers
-#define TAG_GET 134
-#define TAG_SEND 174
-#define TAG_RECEIVE 182
-#define TAG_CTL 183
 
 // Shows list of commands
 void show_help();
@@ -152,7 +148,6 @@ void show_help(){
     printf(" --------------------------------------------------------------\n\n");
 
 }
-
 
 void print_error(char *string){
 

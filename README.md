@@ -53,16 +53,23 @@ of the kernel you have currently installed you can use:
 
 > :warning: The headers must have the **same version** of the kernel
 
+## Configuration
+
+You can configure the maximum number of tag services, the maximum number of levels
+for each service and the size of the buffer used to pass the message. 
+
+To do so open config.h file
+in the root of the project and change them to your liking.
+
 ## Deployment
 1. Create all needed files
-  
-
-    make all
-
+```
+make all
+```
 2. Insert new module into the kernel
-
-
-    insmod soa.ko
+```
+insmod soa.ko
+```
 
 ## Demo
 You can run a demo of this project which lets you call each of the 
@@ -74,7 +81,7 @@ system calls defined in the top of this file.
 
     ./a.out
 
-### Available commands
+#### Available commands
 
   * **get key command permission** calls tag_get with the specified key, command and permission
     * **command = 1** CREATE 
@@ -91,3 +98,27 @@ system calls defined in the top of this file.
   * **help** shows the list of available commands
 
   * **quit** quits the demo
+
+## Directory tree
+```
+/
+  demo/
+      include/
+          threads.h
+      lib/
+          threads.c    
+      demo.c
+  include/
+      level.h
+      tag.h
+      vtpmo.h
+  lib/
+      level.c
+      tag.c
+      usctm.c
+      vtpmo.c
+  
+  config.h
+  Makefile
+  README.md
+```
