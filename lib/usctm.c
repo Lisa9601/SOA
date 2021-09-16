@@ -1,23 +1,15 @@
-/*
-*
-* This is free software; you can redistribute it and/or modify it under the
-* terms of the GNU General Public License as published by the Free Software
-* Foundation; either version 3 of the License, or (at your option) any later
-* version.
-*
-* This module is distributed in the hope that it will be useful, but WITHOUT ANY
-* WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-* A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-*
-* @file usctm.c
-* @brief This is the main source for the Linux Kernel Module which implements
-* 	 the runtime discovery of the syscall table position and of free entries (those
-* 	 pointing to sys_ni_syscall)
-*
-* @author Francesco Quaglia
-*
-* @date November 22, 2020
-*/
+/* ---------------------------------------------------------------------------------------------------------------------
+ USCTM
+
+ This module implements a system call table discoverer which is used to insert 4 new system calls:
+    - tag_get
+    - tag_send
+    - tag_receive
+    - tag_ctl
+
+ The code for the hacking of the system call table was taken from this repository :
+ https://github.com/FrancescoQuaglia/Linux-sys_call_table-discoverer
+--------------------------------------------------------------------------------------------------------------------- */
 
 #define EXPORT_SYMTAB
 #include <linux/module.h>
@@ -41,13 +33,13 @@
 #include <asm/apic.h>
 #include <linux/syscalls.h>
 #include "../include/vtpmo.h"
-#include "../include/tag.h"
+#include "../include/service.h"
+#include "../include/driver.h"
 
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Francesco Quaglia <framcesco.quaglia@uniroma2.it>");
+MODULE_AUTHOR("Lisa Trombetti <lisa.trombetti96@gmail.com>");
 MODULE_DESCRIPTION("USCTM");
-
 
 #define MODNAME "USCTM"
 
@@ -95,8 +87,6 @@ int good_area(unsigned long * addr){
     return 0;
 
 }
-
-
 
 /* This routine checks if the page contains the begin of the syscall_table.  */
 int validate_page(unsigned long *addr){
@@ -163,7 +153,6 @@ void syscall_table_finder(void){
 int free_entries[MAX_FREE];
 module_param_array(free_entries,int,NULL,0660);//default array size already known - here we expose what entries are free
 
-
 #define SYS_CALL_INSTALL
 
 unsigned long cr0;
@@ -225,7 +214,6 @@ asmlinkage int sys_tag_ctl(int tag, int command) {
     return tag_ctl(tag, command);
 }
 
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
 static unsigned long sys_tag_get = (unsigned long) __x64_sys_tag_get;
 static unsigned long sys_tag_send = (unsigned long) __x64_sys_tag_send;
@@ -272,15 +260,20 @@ int init_module(void) {
 #else
 #endif
 
-    printk("%s: module correctly mounted\n",MODNAME);
+    if(init_device() < 0) {
+        printk("%s: Error initializing new device driver\n", MODNAME);
+        return -1;
+    }
 
+    printk("%s: Module correctly mounted\n",MODNAME);
     return 0;
-
 }
 
 void cleanup_module(void) {
 
-    cleanup_tags();
+    cleanup_service(); // Remove service
+
+    cleanup_device(); // Remove device driver
 
 #ifdef SYS_CALL_INSTALL
     cr0 = read_cr0();
@@ -292,6 +285,6 @@ void cleanup_module(void) {
     protect_memory();
 #else
 #endif
-    printk("%s: shutting down\n",MODNAME);
+    printk("%s: Shutting down\n",MODNAME);
 
 }

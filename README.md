@@ -39,8 +39,8 @@ and it's driven by the following system calls:
 By default, at least 256 TAG services are allowed to be handled by software, and
 the maximum size of the handled message is of at least 4 KB.
 
-Also, a device driver was implemented in order to check with the current state, namely the TAG service
-current keys and the number of threads currently waiting for messages.
+Also, a device driver has been implemented in order to check with the current state, namely the TAG service
+the current keys and the number of threads waiting for messages.
 Each line of the corresponding device file it's structured as
 "TAG-key TAG-creator TAG-level Waiting-threads".
 
@@ -55,11 +55,12 @@ of the kernel you have currently installed you can use:
 
 ## Configuration
 
-You can configure the maximum number of tag services, the maximum number of levels
-for each service and the size of the buffer used to pass the message. 
+Al configurable parameters used in this project can be found in the *config.h* file
+ in the root directory. 
 
-To do so open config.h file
-in the root of the project and change them to your liking.
+* **MAX_TAGS** maximum number of tag services
+* **MAX_LV** maximum number of levels for each tag service
+* **MAX_SIZE** maximum size of the message
 
 ## Deployment
 1. Create all needed files
@@ -70,10 +71,14 @@ make all
 ```
 insmod soa.ko
 ```
+3. (OPTIONAL) Change device file's permission
+```
+chmod 0666 /dev/tag_dev
+```
 
 ## Demo
 You can run a demo of this project which lets you call each of the 
-system calls defined in the top of this file.
+system calls defined in the top section of this file.
 
     cd demo
     
@@ -81,44 +86,60 @@ system calls defined in the top of this file.
 
     ./a.out
 
-#### Available commands
+#### Available commands:
 
-  * **get key command permission** calls tag_get with the specified key, command and permission
-    * **command = 1** CREATE 
-    * **command = 2** OPEN
+  * **get key** calls tag_get with the specified key creating a new tag service for the current user ( key = 0 creates a private service )
+  
+  * **open key** calls tag_get with the specified key opening the tag service
 
-  * **send tag level buffer** calls tag_send on the specified tag and level to send the buffer
+  * **send tag level 'message'** calls tag_send on the specified tag and level to send the message to all waiting threads. Use single quotes around the message you wish to send
 
-  * **receive tag level size** calls tag_receive on the specified tag and level to receive a message of the specified size
+  * **recv tag level size** calls tag_receive on the specified tag and level to receive a message of the specified size
 
-  * **ctl tag command** calls tag_ctl on the specified tag service to execute the command
-    * **command = 3** AWAKE ALL
-    * **command = 4** REMOVE
+  * **awake tag** calls tag_ctl on the specified tag service to awake all waiting threads
+
+  * **del tag** calls tag_ctl on the specified tag service deleting it if possible    
 
   * **help** shows the list of available commands
 
   * **quit** quits the demo
 
+
+## Test
+All the tests which were created to check on the system calls can be found in /test.
+
+    sh test.sh
+
 ## Directory tree
 ```
 /
   demo/
-      include/
-          threads.h
-      lib/
-          threads.c    
       demo.c
+  
   include/
+      driver.h
       level.h
+      service.h
+      struct.h
       tag.h
       vtpmo.h
+  
   lib/
+      driver.c
       level.c
+      service.c
       tag.c
       usctm.c
       vtpmo.c
   
+  test/
+      test.h
+      test_ctl.c
+      test_get.c
+      test_send_recv.c
+      
   config.h
   Makefile
   README.md
+  test.sh
 ```
