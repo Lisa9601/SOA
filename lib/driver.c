@@ -13,6 +13,7 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include "../include/tag.h"
+#include "../include/driver.h"
 #include "../config.h"
 
 MODULE_LICENSE("GPL");
@@ -35,7 +36,7 @@ static spinlock_t dev_lock;
 // Device file operations
 static int device_open(struct inode *, struct file *);
 static int device_release(struct inode *, struct file *);
-static ssize_t device_read(struct file *, char *, size_t, loff_t *);
+static ssize_t device_read(struct file *, char __user *, size_t, loff_t *);
 static ssize_t device_write(struct file *, const char *, size_t, loff_t *);
 
 static struct file_operations fops = {
@@ -99,6 +100,7 @@ int init_device(void) {
     return 0;
 }
 
+
 /* Remove device driver */
 void cleanup_device(void) {
 
@@ -112,11 +114,13 @@ void cleanup_device(void) {
     printk("%s: %s unregistered successfully\n", MODNAME, DEVICE_NAME);
 }
 
+
 /* Open device file */
 static int device_open(struct inode *inode, struct file *file) {
     // Do nothing
     return 0;
 }
+
 
 /* Close device file */
 static int device_release(struct inode *inode, struct file *file) {
@@ -124,31 +128,29 @@ static int device_release(struct inode *inode, struct file *file) {
     return 0;
 }
 
+
 /* Read device file */
-static ssize_t device_read(struct file *filp, char *user_buff, size_t size, loff_t *off) {
+static ssize_t device_read(struct file *filp, char __user *user_buff, size_t size, loff_t *off) {
     ssize_t len;
 
-    spin_lock(&dev_lock);
-
     // Update buffer with new tag info
+    spin_lock(&dev_lock);
     if(tag_info(buff) < 0) printk("%s: Unable to update buffer with new info\n", MODNAME);
+    spin_unlock(&dev_lock);
 
     len = min((size_t)BUFF_LEN - (size_t)*off, size);
 
     if (len <= 0) {
-        spin_unlock(&dev_lock);
         return 0;
     }
 
     // Copy data to user
     if (copy_to_user(user_buff, buff + *off, len)) {
-        spin_unlock(&dev_lock);
         return -EFAULT;
     }
 
     *off += len;
 
-    spin_unlock(&dev_lock);
     return len;
 }
 

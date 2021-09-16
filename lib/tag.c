@@ -386,5 +386,5 @@ int tag_info(char* buffer){
         }
     }
 
-    return 0;
+    return off;
 }
