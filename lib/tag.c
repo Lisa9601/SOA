@@ -24,7 +24,6 @@ MODULE_DESCRIPTION("TAG SERVICE");
 
 
 static struct tag_t* tags[MAX_TAGS];   // List of tags
-static int start;                      // Where to start searching for an available slot
 static spinlock_t tag_lock;            // Tag list write lock
 
 
@@ -144,7 +143,6 @@ int insert_tag(int key, int private, uid_t uid){
         new->lv_head = lv_head;
 
         tags[desc] = new;  // Add new tag
-        start = desc+1; // Start searching from the following element
     }
 
     spin_unlock(&tag_lock);
@@ -239,7 +237,6 @@ int delete_tag(int desc, uid_t uid){
 
     tag = tags[desc];
     tags[desc] = NULL;
-    start = desc; // Start searching from this point next time
     spin_unlock(&tag_lock);
 
     kfree(tag); // Reclaim space
